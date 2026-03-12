@@ -114,31 +114,51 @@ const MaskCanvas = forwardRef(({ imageUrl }, ref) => {
     }, [undoStack]);
 
     return (
-        <div className="mask-canvas-wrapper" style={{ position: 'relative', width:'512px', height:'512px', background:'#000', borderRadius:'12px', overflow:'hidden' }}>
-            {/* Background Image */}
-            <img src={imageUrl} alt="Background" 
-                 style={{ position:'absolute', top:0, left:0, width:'100%', height:'100%', objectFit:'contain', userSelect:'none' }} />
-            
-            {/* Painting Layer */}
-            <canvas
-                ref={canvasRef}
-                width={512}
-                height={512}
-                onMouseDown={startDrawing}
-                onMouseMove={draw}
-                onMouseUp={stopDrawing}
-                onMouseOut={stopDrawing}
-                style={{ position:'absolute', top:0, left:0, width:'100%', height:'100%', cursor:'crosshair', touchAction:'none', opacity: 0.6 }}
-            />
+        <div className="mask-editor-container">
+            <div className="mask-canvas-wrapper">
+                {/* Background Image */}
+                <img src={imageUrl} alt="Background" className="mask-underlay" />
+                
+                {/* Painting Layer */}
+                <canvas
+                    ref={canvasRef}
+                    width={512}
+                    height={512}
+                    onMouseDown={startDrawing}
+                    onMouseMove={draw}
+                    onMouseUp={stopDrawing}
+                    onMouseOut={stopDrawing}
+                    className="mask-canvas"
+                />
+            </div>
 
-            {/* Toolbar */}
-            <div className="brush-toolbar" style={{ position:'absolute', bottom:'1rem', left:'50%', transform:'translateX(-50%)', display:'flex', gap:'0.8rem', background:'rgba(0,0,0,0.7)', padding:'0.6rem 1rem', borderRadius:'999px', backdropFilter:'blur(10px)', border:'1px solid rgba(255,255,255,0.1)', zIndex: 10 }}>
-                <button className={`tool-btn ${!isErasing ? 'active' : ''}`} onClick={() => setIsErasing(false)}>🖌️ Brush</button>
-                <button className={`tool-btn ${isErasing ? 'active' : ''}`} onClick={() => setIsErasing(true)}>🧽 Eraser</button>
-                <button className="tool-btn" onClick={undo} style={{marginLeft:'0.5rem'}}>↩ Undo</button>
-                <div style={{ height:'20px', width:'1px', background:'rgba(255,255,255,0.2)', margin:'0 4px' }} />
-                <span className="brush-size-label" style={{ color:'#fff', fontSize:'0.75rem', alignSelf:'center' }}>Size</span>
-                <input type="range" min="5" max="150" value={brushSize} onChange={e => setBrushSize(Number(e.target.value))} style={{ width:'80px' }} />
+            {/* Toolbar - Now outside the canvas wrapper */}
+            <div className="brush-toolbar">
+                <div className="tool-group">
+                    <button className={`tool-btn ${!isErasing ? 'active' : ''}`} onClick={() => setIsErasing(false)}>
+                        <span className="tool-icon">🖌️</span> Brush
+                    </button>
+                    <button className={`tool-btn ${isErasing ? 'active' : ''}`} onClick={() => setIsErasing(true)}>
+                        <span className="tool-icon">🧽</span> Eraser
+                    </button>
+                    <button className="tool-btn undo-btn" onClick={undo}>
+                        <span className="tool-icon">↩</span> Undo
+                    </button>
+                </div>
+                
+                <div className="toolbar-divider" />
+                
+                <div className="brush-size-control">
+                    <span className="brush-size-label">Size: <span className="size-val">{brushSize}px</span></span>
+                    <input 
+                        type="range" 
+                        min="5" 
+                        max="150" 
+                        value={brushSize} 
+                        onChange={e => setBrushSize(Number(e.target.value))} 
+                        className="brush-slider"
+                    />
+                </div>
             </div>
         </div>
     );

@@ -272,6 +272,139 @@ kbd {
 .upload-zone p { color: var(--text-muted); font-size: 0.9rem; }
 .upload-zone input { display: none; }
 
+/* --- Masking UI Refinement --- */
+.mask-editor-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    width: 100%;
+}
+
+.mask-canvas-wrapper {
+    position: relative;
+    width: 512px;
+    height: 512px;
+    background: #000;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--border);
+}
+
+.mask-underlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    user-select: none;
+}
+
+.mask-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+    touch-action: none;
+    opacity: 0.6;
+}
+
+.brush-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    background: rgba(28, 29, 48, 0.8);
+    padding: 0.75rem 1.5rem;
+    border-radius: 999px;
+    backdrop-filter: blur(15px);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.tool-group {
+    display: flex;
+    gap: 0.6rem;
+}
+
+.tool-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1.1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text-sub);
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.tool-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--primary);
+    color: #fff;
+    transform: translateY(-2px);
+}
+
+.tool-btn.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+
+.undo-btn {
+    margin-left: 0.4rem;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.tool-icon {
+    font-size: 1rem;
+}
+
+.toolbar-divider {
+    height: 24px;
+    width: 1px;
+    background: var(--border);
+}
+
+.brush-size-control {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.brush-size-label {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.size-val {
+    color: var(--primary);
+    font-family: monospace;
+}
+
+.brush-slider {
+    width: 120px;
+    height: 6px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
 /* --- Right Panel Controls --- */
 
 
