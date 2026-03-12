@@ -1,219 +1,144 @@
-const { useRef, useEffect, useState, forwardRef, useImperativeHandle, useCallback } = React;
+const { useRef, useEffect, useState, useImperativeHandle, forwardRef } = React;
 
+/**
+ * MaskCanvas UI:
+ * - Layers: [Underlay Background] + [Overlay Canvas for Painting]
+ * - Tool: Brush or Eraser
+ * - Output: Base64 of the painted regions (alpha channel)
+ */
 const MaskCanvas = forwardRef(({ imageUrl }, ref) => {
-    const canvasRef      = useRef(null);
-    const overlayRef     = useRef(null);        // cursor preview canvas
-    const maskCanvasRef  = useRef(document.createElement('canvas'));
-    const imgRef         = useRef(null);
-    const undoStack      = useRef([]);           // undo history of mask blobs
-    const isDrawingRef   = useRef(false);
+    const canvasRef = useRef(null);
+    const ctxRef    = useRef(null);
+    const [isDrawing, setIsDrawing] = useState(false);
+    const [brushSize, setBrushSize] = useState(30);
+    const [isErasing, setIsErasing] = useState(false);
+    const [undoStack, setUndoStack] = useState([]);
 
-    const [brushSize, setBrushSize]   = useState(32);
-    const [mode, setMode]             = useState('draw');
-    const [maskOpacity, setMaskOpacity] = useState(0.55);
-    const [cursorPos, setCursorPos]   = useState(null);
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        const ctx    = canvas.getContext('2d');
+        ctx.lineCap  = 'round';
+        ctx.lineJoin = 'round';
+        ctxRef.current = ctx;
 
-    // ── Expose methods ────────────────────────────────────────────
+        // Initialize with empty black (meaning no mask)
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        saveToUndo();
+    }, []);
+
+    const saveToUndo = () => {
+        const canvas = canvasRef.current;
+        setUndoStack(prev => [...prev.slice(-19), canvas.toDataURL()]);
+    };
+
+    const undo = () => {
+        if (undoStack.length <= 1) return;
+        const newStack = [...undoStack];
+        newStack.pop();
+        const prevState = newStack[newStack.length - 1];
+        
+        const img = new Image();
+        img.src = prevState;
+        img.onload = () => {
+            ctxRef.current.clearRect(0, 0, 512, 512);
+            ctxRef.current.drawImage(img, 0, 0);
+            setUndoStack(newStack);
+        };
+    };
+
     useImperativeHandle(ref, () => ({
-        getMaskBase64: () => maskCanvasRef.current.toDataURL('image/png'),
+        getMaskBase64: () => {
+            return canvasRef.current.toDataURL("image/png");
+        },
         hasPaintedMask: () => {
-            const mc  = maskCanvasRef.current;
-            const data = mc.getContext('2d').getImageData(0, 0, mc.width, mc.height).data;
-            for (let i = 3; i < data.length; i += 4) if (data[i] > 10) return true;
+            const ctx = ctxRef.current;
+            const data = ctx.getImageData(0,0,512,512).data;
+            for(let i=3; i<data.length; i+=4) if(data[i] > 0) return true;
             return false;
         },
-        clearMask: () => { clearAll(); },
-        undo: () => { undoLast(); },
+        loadMask: (maskUrl) => {
+            if (!maskUrl) return;
+            const img = new Image();
+            img.src = maskUrl;
+            img.onload = () => {
+                ctxRef.current.clearRect(0, 0, 512, 512);
+                ctxRef.current.drawImage(img, 0, 0);
+                saveToUndo();
+            };
+        },
+        clear: () => {
+            ctxRef.current.clearRect(0,0,512,512);
+            saveToUndo();
+        }
     }));
 
-    // ── Load image ───────────────────────────────────────────────
-    useEffect(() => {
-        if (!imageUrl) return;
-        const img = new Image();
-        img.onload = () => {
-            imgRef.current = img;
-            const w = img.naturalWidth, h = img.naturalHeight;
-            [canvasRef, overlayRef, maskCanvasRef].forEach(r => {
-                r.current.width  = w;
-                r.current.height = h;
-            });
-            maskCanvasRef.current.getContext('2d').clearRect(0, 0, w, h);
-            undoStack.current = [];
-            renderFrame();
-        };
-        img.src = imageUrl;
-    }, [imageUrl]);
-
-    useEffect(() => { renderFrame(); }, [maskOpacity]);
-
-    // ── Render ────────────────────────────────────────────────────
-    const renderFrame = useCallback(() => {
-        const canvas = canvasRef.current;
-        if (!canvas || !imgRef.current) return;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(imgRef.current, 0, 0);
-        ctx.globalAlpha = maskOpacity;
-        ctx.drawImage(maskCanvasRef.current, 0, 0);
-        ctx.globalAlpha = 1;
-    }, [maskOpacity]);
-
-    // ── Undo ──────────────────────────────────────────────────────
-    const saveUndoState = () => {
-        const mc = maskCanvasRef.current;
-        mc.toBlob(blob => undoStack.current.push(blob));
-    };
-
-    const undoLast = () => {
-        if (undoStack.current.length === 0) return;
-        const blob = undoStack.current.pop();
-        const url  = URL.createObjectURL(blob);
-        const img  = new Image();
-        img.onload = () => {
-            const ctx = maskCanvasRef.current.getContext('2d');
-            ctx.clearRect(0, 0, maskCanvasRef.current.width, maskCanvasRef.current.height);
-            ctx.drawImage(img, 0, 0);
-            URL.revokeObjectURL(url);
-            renderFrame();
-        };
-        img.src = url;
-    };
-
-    // ── Clear ─────────────────────────────────────────────────────
-    const clearAll = () => {
-        saveUndoState();
-        const ctx = maskCanvasRef.current.getContext('2d');
-        ctx.clearRect(0, 0, maskCanvasRef.current.width, maskCanvasRef.current.height);
-        renderFrame();
-    };
-
-    // ── Coordinate helper ─────────────────────────────────────────
-    const getPos = (e) => {
-        const canvas = canvasRef.current;
-        const rect   = canvas.getBoundingClientRect();
-        const scaleX = canvas.width  / rect.width;
-        const scaleY = canvas.height / rect.height;
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY,
-                 cx: clientX - rect.left, cy: clientY - rect.top };
-    };
-
-    // ── Cursor preview ────────────────────────────────────────────
-    const drawCursor = (cx, cy) => {
-        const oc = overlayRef.current;
-        if (!oc) return;
-        const ctx = oc.getContext('2d');
-        ctx.clearRect(0, 0, oc.width, oc.height);
-        const scale = oc.width / oc.getBoundingClientRect().width;
-        const r = (brushSize / 2);
-        ctx.beginPath();
-        ctx.arc(cx * scale, cy * scale, r, 0, Math.PI * 2);
-        ctx.strokeStyle = mode === 'draw' ? 'rgba(99,102,241,0.9)' : 'rgba(255,80,80,0.9)';
-        ctx.lineWidth   = 2;
-        ctx.setLineDash([4, 3]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-    };
-
-    const clearCursor = () => {
-        const oc = overlayRef.current;
-        if (oc) oc.getContext('2d').clearRect(0, 0, oc.width, oc.height);
-    };
-
-    // ── Drawing ───────────────────────────────────────────────────
     const startDrawing = (e) => {
-        e.preventDefault();
-        saveUndoState();
-        isDrawingRef.current = true;
-        paintAt(e);
+        setIsDrawing(true);
+        draw(e);
     };
 
     const stopDrawing = () => {
-        isDrawingRef.current = false;
-        maskCanvasRef.current.getContext('2d').beginPath();
+        if (isDrawing) saveToUndo();
+        setIsDrawing(false);
+        ctxRef.current.beginPath();
     };
 
-    const paintAt = (e) => {
-        const { x, y, cx, cy } = getPos(e);
-        drawCursor(cx, cy);
-        if (!isDrawingRef.current) return;
+    const draw = (e) => {
+        if (!isDrawing) return;
+        const canvas = canvasRef.current;
+        const rect   = canvas.getBoundingClientRect();
+        
+        // Scale coords if displayed size != 512x512
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
 
-        const maskCtx = maskCanvasRef.current.getContext('2d');
-        maskCtx.lineWidth = brushSize;
-        maskCtx.lineCap   = 'round';
-        maskCtx.lineJoin  = 'round';
+        const ctx = ctxRef.current;
+        ctx.lineWidth = brushSize;
+        ctx.globalCompositeOperation = isErasing ? 'destination-out' : 'source-over';
+        ctx.strokeStyle = '#ffffff'; // White signifies "edit here"
 
-        if (mode === 'draw') {
-            maskCtx.globalCompositeOperation = 'source-over';
-            maskCtx.strokeStyle = 'rgba(99,102,241,0.9)';
-        } else {
-            maskCtx.globalCompositeOperation = 'destination-out';
-            maskCtx.strokeStyle = 'rgba(0,0,0,1)';
-        }
-        maskCtx.lineTo(x, y);
-        maskCtx.stroke();
-        maskCtx.beginPath();
-        maskCtx.moveTo(x, y);
-        renderFrame();
+        ctx.lineTo(x, y);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x, y);
     };
 
-    // ── Keyboard shortcut: Ctrl+Z undo ───────────────────────────
     useEffect(() => {
-        const handler = (e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undoLast(); }
+        const handleKeyDown = (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
         };
-        window.addEventListener('keydown', handler);
-        return () => window.removeEventListener('keydown', handler);
-    }, []);
-
-    if (!imageUrl) return null;
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [undoStack]);
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', width: '100%' }}>
+        <div className="mask-canvas-wrapper" style={{ position: 'relative', width:'512px', height:'512px', background:'#000', borderRadius:'12px', overflow:'hidden' }}>
+            {/* Background Image */}
+            <img src={imageUrl} alt="Background" 
+                 style={{ position:'absolute', top:0, left:0, width:'100%', height:'100%', objectFit:'contain', userSelect:'none' }} />
+            
+            {/* Painting Layer */}
+            <canvas
+                ref={canvasRef}
+                width={512}
+                height={512}
+                onMouseDown={startDrawing}
+                onMouseMove={draw}
+                onMouseUp={stopDrawing}
+                onMouseOut={stopDrawing}
+                style={{ position:'absolute', top:0, left:0, width:'100%', height:'100%', cursor:'crosshair', touchAction:'none', opacity: 0.6 }}
+            />
+
             {/* Toolbar */}
-            <div className="brush-toolbar">
-                <button className={`tool-btn ${mode === 'draw'  ? 'active' : ''}`} onClick={() => setMode('draw')}>
-                    🖌️ Paint
-                </button>
-                <button className={`tool-btn ${mode === 'erase' ? 'active' : ''}`} onClick={() => setMode('erase')}>
-                    🧽 Erase
-                </button>
-                <button className="tool-btn" onClick={undoLast} title="Ctrl+Z">
-                    ↩ Undo
-                </button>
-                <button className="tool-btn" onClick={clearAll}>
-                    🗑 Clear
-                </button>
-                <div className="toolbar-slider-group">
-                    <span className="brush-size-label">Size {brushSize}px</span>
-                    <input type="range" min="5" max="120" step="1"
-                        value={brushSize} onChange={e => setBrushSize(Number(e.target.value))}
-                        style={{ width: '70px' }} />
-                </div>
-                <div className="toolbar-slider-group">
-                    <span className="brush-size-label">Opacity</span>
-                    <input type="range" min="0.1" max="1" step="0.05"
-                        value={maskOpacity} onChange={e => setMaskOpacity(Number(e.target.value))}
-                        style={{ width: '60px' }} />
-                </div>
-            </div>
-
-            {/* Canvas stack */}
-            <div className="canvas-container" style={{ position: 'relative' }}>
-                {/* Main canvas */}
-                <canvas ref={canvasRef} style={{ display: 'block', width: '100%', cursor: 'none' }}
-                    onMouseDown={startDrawing} onMouseUp={stopDrawing}
-                    onMouseLeave={() => { stopDrawing(); clearCursor(); }}
-                    onMouseMove={paintAt}
-                    onTouchStart={startDrawing} onTouchEnd={stopDrawing} onTouchMove={paintAt} />
-                {/* Cursor overlay canvas */}
-                <canvas ref={overlayRef}
-                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%',
-                             pointerEvents: 'none', display: 'block' }} />
-            </div>
-
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                💡 Paint the area to edit · <kbd>Ctrl+Z</kbd> undo · <kbd>B</kbd> brush · <kbd>E</kbd> erase
+            <div className="brush-toolbar" style={{ position:'absolute', bottom:'1rem', left:'50%', transform:'translateX(-50%)', display:'flex', gap:'0.8rem', background:'rgba(0,0,0,0.7)', padding:'0.6rem 1rem', borderRadius:'999px', backdropFilter:'blur(10px)', border:'1px solid rgba(255,255,255,0.1)', zIndex: 10 }}>
+                <button className={`tool-btn ${!isErasing ? 'active' : ''}`} onClick={() => setIsErasing(false)}>🖌️ Brush</button>
+                <button className={`tool-btn ${isErasing ? 'active' : ''}`} onClick={() => setIsErasing(true)}>🧽 Eraser</button>
+                <button className="tool-btn" onClick={undo} style={{marginLeft:'0.5rem'}}>↩ Undo</button>
+                <div style={{ height:'20px', width:'1px', background:'rgba(255,255,255,0.2)', margin:'0 4px' }} />
+                <span className="brush-size-label" style={{ color:'#fff', fontSize:'0.75rem', alignSelf:'center' }}>Size</span>
+                <input type="range" min="5" max="150" value={brushSize} onChange={e => setBrushSize(Number(e.target.value))} style={{ width:'80px' }} />
             </div>
         </div>
     );

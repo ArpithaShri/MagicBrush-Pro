@@ -1,5 +1,5 @@
 // ─── Config ────────────────────────────────────────────────────
-const API_URL = "https://luetically-aplanatic-jackson.ngrok-free.dev";
+const API_URL = "https://centaurial-caridad-unusurious.ngrok-free.dev";
 const HF_API  = "https://datasets-server.huggingface.co/rows?dataset=osunlp%2FMagicBrush&config=default&split=train&offset=0&limit=100";
 
 const { useState, useRef, useEffect, useCallback } = React;
@@ -89,7 +89,6 @@ function App() {
     const maskCanvasRef                       = useRef(null);
     const { toasts, toast }                   = useToast();
 
-    // Settings
     const [settingsOpen, setSettingsOpen]     = useState(false);
     const [guidance, setGuidance]             = useState(7.5);
     const [imageGuidance, setImageGuidance]   = useState(1.5);
@@ -97,14 +96,12 @@ function App() {
     const [inferenceSteps, setInferenceSteps] = useState(30);
     const [negativePrompt, setNegativePrompt] = useState("blurry, deformed, ugly, bad anatomy, low quality, watermark");
 
-    // Dataset modal
     const [modalOpen, setModalOpen]           = useState(false);
     const [allSamples, setAllSamples]         = useState([]);
     const [searchQuery, setSearchQuery]       = useState("");
     const [loadingSamples, setLoadingSamples] = useState(false);
     const [modalFetched, setModalFetched]     = useState(false);
 
-    // Lightbox
     const [lightboxResult, setLightboxResult] = useState(null);
 
     const filteredSamples = searchQuery.trim()
@@ -113,7 +110,6 @@ function App() {
 
     const selectedResult = results.find(r => r.id === selectedId);
 
-    // ── Dataset modal ─────────────────────────────────────────────
     const openModal = async () => {
         setModalOpen(true); setSearchQuery("");
         if (modalFetched) return;
@@ -122,9 +118,15 @@ function App() {
             const res  = await fetch(HF_API);
             const data = await res.json();
             if (data.rows) {
-                setAllSamples(data.rows.map(r => ({ src: r.row.source_img?.src, prompt: r.row.instruction })).filter(s => s.src && s.prompt));
+                setAllSamples(data.rows.map(r => ({ 
+                    src: r.row.source_img?.src || r.row.source_img, 
+                    prompt: r.row.instruction 
+                })).filter(s => s.src && s.prompt));
             }
-        } catch(e) { toast("Could not load dataset from HuggingFace", 'error'); }
+        } catch(e) { 
+            console.error(e);
+            toast("Could not load dataset from HuggingFace", 'error'); 
+        }
         finally    { setLoadingSamples(false); setModalFetched(true); }
     };
 
@@ -135,11 +137,11 @@ function App() {
             const blob = await res.blob();
             const b64  = await new Promise(resolve => { const r = new FileReader(); r.onload = ev => resolve(ev.target.result); r.readAsDataURL(blob); });
             setImage(b64);
+            maskCanvasRef.current?.clear?.();
             toast("Sample loaded — paint your mask, then Generate!", 'success');
-        } catch(e) { setImage(sample.src); }
+        } catch(e) { setImage(sample.src); maskCanvasRef.current?.clear?.(); }
     };
 
-    // ── Generate ──────────────────────────────────────────────────
     const handleGenerate = useCallback(async () => {
         if (!image || !prompt.trim()) { toast("Upload an image and enter a prompt first", 'warn'); return; }
         setIsGenerating(true); setResults([]); setSelectedId(null);
@@ -171,7 +173,7 @@ function App() {
                     final_score: s.scores.final_score,
                 }));
                 setResults(normalized);
-                setSelectedId(0); // auto-select best
+                setSelectedId(0);
                 toast(`✨ ${normalized.length} candidates generated! Best is auto-selected.`, 'success');
             } else {
                 toast("No results returned from backend", 'error');
@@ -182,7 +184,6 @@ function App() {
         } finally { setIsGenerating(false); }
     }, [image, prompt, negativePrompt, numSamples, inferenceSteps]);
 
-    // ── Copy to clipboard ─────────────────────────────────────────
     const copyToClipboard = async (result) => {
         try {
             const res  = await fetch(result.image);
@@ -194,7 +195,6 @@ function App() {
         }
     };
 
-    // ── Keyboard shortcuts ────────────────────────────────────────
     useEffect(() => {
         const handler = (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -205,15 +205,19 @@ function App() {
         return () => window.removeEventListener('keydown', handler);
     }, [handleGenerate]);
 
-    // ── Upload ────────────────────────────────────────────────────
     const setImgFromFile = (file) => {
         if (!file?.type?.startsWith('image/')) return;
         const reader = new FileReader();
-        reader.onload = ev => { setImage(ev.target.result); setResults([]); setSelectedId(null); toast("Image loaded — now paint your mask!", 'info'); };
+        reader.onload = ev => { 
+            setImage(ev.target.result); 
+            setResults([]); 
+            setSelectedId(null); 
+            maskCanvasRef.current?.clear?.();
+            toast("Image loaded — now paint your mask!", 'info'); 
+        };
         reader.readAsDataURL(file);
     };
 
-    // ── Download ──────────────────────────────────────────────────
     const handleDownload = () => {
         if (selectedResult) {
             const a = document.createElement("a");
@@ -229,23 +233,13 @@ function App() {
             <ToastContainer toasts={toasts} />
             {lightboxResult && <Lightbox result={lightboxResult} original={image} onClose={() => setLightboxResult(null)} />}
 
-            {/* ── Header ── */}
             <header>
-                <div className="logo-badge">✦ AI-Powered Editing</div>
+                <div className="logo-badge">✦ MagicBrush Pro</div>
                 <h1>MagicBrush Pro</h1>
-                <p>SD Inpainting · Mask-aware region editing · CLIP + LPIPS candidate ranking</p>
-                <div className="shortcut-bar">
-                    <kbd>Enter</kbd> Generate &nbsp;·&nbsp;
-                    <kbd>Ctrl+Z</kbd> Undo mask &nbsp;·&nbsp;
-                    <kbd>B</kbd> Brush &nbsp;·&nbsp;
-                    <kbd>E</kbd> Erase &nbsp;·&nbsp;
-                    <kbd>Esc</kbd> Close
-                </div>
+                <p>Professional Generative AI Workspace · Precision Mask Editing</p>
             </header>
 
-            {/* ── Workspace ── */}
-            <div className="workspace">
-                {/* Left: Canvas */}
+            <div className="workspace animate-in">
                 <div className="left-panel">
                     <div className="panel-label">Source Image + Mask</div>
                     {!image ? (
@@ -258,20 +252,16 @@ function App() {
                             <input type="file" accept="image/*" onChange={e => setImgFromFile(e.target.files[0])} />
                         </label>
                     ) : (
-                        <MaskCanvas ref={maskCanvasRef} imageUrl={image} />
+                        <window.MaskCanvas ref={maskCanvasRef} imageUrl={image} />
                     )}
                 </div>
 
-                {/* Right: Controls */}
                 <div className="right-panel">
-
                     <button className="btn-dataset" onClick={openModal}>
-                        <span style={{fontSize:'1.1rem'}}>📁</span>
+                        <span>📂</span>
                         <span>Browse MagicBrush Dataset</span>
                         <span className="badge-hot">100 samples</span>
                     </button>
-
-                    <div className="divider" />
 
                     <div>
                         <div className="section-title">Edit Instruction</div>
@@ -312,32 +302,28 @@ function App() {
                                     </div>
                                 ))}
                             </div>
-                            <div className="settings-hint">⚡ Higher steps = better quality but slower</div>
                         </div>
                     )}
 
                     <div className="divider" />
-
                     <div className="status-hint"><div className="hint-dot" />GPU backend connected · ngrok tunnel active</div>
 
                     <button className="btn-generate" onClick={handleGenerate}
                         disabled={!image || !prompt.trim() || isGenerating}>
                         {isGenerating
                             ? <><div className="spinner-ring" style={{width:'20px',height:'20px',borderWidth:'2px'}} /> Generating…</>
-                            : <>✨ Generate Edits &nbsp;<kbd style={{fontSize:'0.7rem',opacity:0.7,background:'rgba(255,255,255,0.15)',padding:'0.1rem 0.3rem',borderRadius:'3px'}}>Enter</kbd></>
+                            : <>✨ Generate Edits</>
                         }
                     </button>
 
-                    {image && <button className="btn-secondary" onClick={handleReset} disabled={isGenerating}>↩ Start Over</button>}
+                    {image && <button className="btn-secondary" style={{marginTop:'1rem'}} onClick={handleReset} disabled={isGenerating}>↩ Start Over</button>}
                 </div>
             </div>
 
-            {/* ── Loading ── */}
             {isGenerating && (
                 <div className="loading-section">
                     <div className="spinner-ring" />
-                    <p>Generating {numSamples} candidate{numSamples !== 1 ? 's' : ''} · {inferenceSteps} steps · CLIP + LPIPS ranking…<br />
-                    <span style={{fontSize:'0.8rem',opacity:0.7}}>Est. {Math.round(numSamples * inferenceSteps * 0.7)}–{Math.round(numSamples * inferenceSteps * 1.3)}s on GPU</span></p>
+                    <p>Generating {numSamples} candidate{numSamples !== 1 ? 's' : ''} · {inferenceSteps} steps · CLIP + LPIPS ranking…</p>
                     <div className="loading-steps">
                         {["SD Inpainting","Mask compositing","CLIP scoring","LPIPS scoring","Ranking"].map(s => (
                             <span key={s} className="step-chip active">{s}</span>
@@ -346,7 +332,6 @@ function App() {
                 </div>
             )}
 
-            {/* ── Gallery ── */}
             {results.length > 0 && (
                 <div className="gallery-section">
                     <div className="gallery-header">
@@ -381,11 +366,10 @@ function App() {
                         ))}
                     </div>
 
-                    {/* Before/After for selected result */}
                     {selectedResult && (
                         <div className="ba-section">
                             <div className="ba-section-header">
-                                <h3>◀▶ Before / After — drag the slider</h3>
+                                <h3>◀▶ Before / After Comparison</h3>
                                 <div className="ba-section-actions">
                                     <button className="btn-secondary" style={{padding:'0.4rem 0.9rem',fontSize:'0.82rem'}}
                                         onClick={() => copyToClipboard(selectedResult)}>📋 Copy</button>
@@ -400,7 +384,6 @@ function App() {
                 </div>
             )}
 
-            {/* ── Dataset Modal ── */}
             {modalOpen && (
                 <div className="modal-overlay" onClick={() => setModalOpen(false)}>
                     <div className="modal-box" onClick={e => e.stopPropagation()}>
@@ -412,27 +395,16 @@ function App() {
                             <button className="modal-close" onClick={() => setModalOpen(false)}>✕</button>
                         </div>
                         <input className="modal-search" type="text" autoFocus
-                            placeholder="Search… e.g. 'cat', 'balloon', 'window', 'sky', 'dog'"
+                            placeholder="Search…"
                             value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-                        <div className="modal-workflow-hint">
-                            <span>① Click sample</span><span className="arrow">→</span>
-                            <span>② Paint mask on image</span><span className="arrow">→</span>
-                            <span>③ Press Enter / Generate</span>
-                        </div>
                         {loadingSamples && <div className="modal-loading"><div className="spinner-ring" /><span>Loading from HuggingFace…</span></div>}
                         <div className="modal-grid">
                             {filteredSamples.map((s, i) => (
                                 <div key={i} className="modal-card" onClick={() => loadSample(s)}>
                                     <img src={s.src} alt={s.prompt} />
-                                    <div className="modal-card-overlay"><span>⬇ Load</span></div>
                                     <div className="modal-card-prompt">{s.prompt}</div>
                                 </div>
                             ))}
-                            {!loadingSamples && filteredSamples.length === 0 && (
-                                <div style={{gridColumn:'1/-1',textAlign:'center',color:'var(--text-muted)',padding:'2rem'}}>
-                                    No samples match "{searchQuery}".
-                                </div>
-                            )}
                         </div>
                     </div>
                 </div>
