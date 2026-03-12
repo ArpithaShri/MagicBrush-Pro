@@ -35,7 +35,7 @@ class InpaintPipeline:
             prompt=prompt,
             image=image,
             mask_image=mask,
-            num_inference_steps=30,
+            num_inference_steps=20,
             guidance_scale=7.5,
             num_images_per_prompt=num_samples,
         ).images

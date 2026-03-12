@@ -93,7 +93,7 @@ async def generate_images(
         # --- Run SD Inpainting ---
         pipeline = get_pipeline()
         # generated_images is now a list of PIL images returned in one batch
-        generated_images = pipeline.generate(proc_img, mask_pil, prompt, num_samples=4)
+        generated_images = pipeline.generate(proc_img, mask_pil, prompt, num_samples=2)
 
         # --- HARD COMPOSITE ---
         composited_images = [hard_composite(proc_img, g, mask_alpha) for g in generated_images]
